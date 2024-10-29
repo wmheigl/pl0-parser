@@ -13,8 +13,7 @@ interpreter) from scratch, this project makes use of established tools:
 Flex for lexical analysis and Bison for parsing, generating an abstract syntax
 tree (AST) representation of the input program.
 
-Type checking, semantic analysis will be implemented from scratch. Ultimately, I
-would like to use LLVM for the backend.
+Type checking, semantic analysis, and code generation are not implemented here.
 
 ## Prerequisites
 
