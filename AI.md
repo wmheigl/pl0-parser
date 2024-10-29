@@ -11,7 +11,7 @@ The following components were developed with AI assistance:
 - Code architecture suggestions
 - Algorithm optimization
 - Documentation generation
-- [List specific components/features]
+- Project setup
 
 ### Usage Scope
 AI assistance was primarily used for:
