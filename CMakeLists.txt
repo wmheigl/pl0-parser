@@ -18,6 +18,8 @@ add_flex_bison_dependency(scanner parser)
 # Create the main library
 add_library(pl0_lib
     src/ast.c
+    src/type_check.c
+    src/semantic.c
     ${FLEX_scanner_OUTPUTS}
     ${BISON_parser_OUTPUTS}
 )
