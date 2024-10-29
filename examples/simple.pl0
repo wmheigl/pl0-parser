@@ -1,0 +1,15 @@
+CONST a = 2, b = 3, c = 4;
+VAR x, y, z;
+
+PROCEDURE square;
+BEGIN
+   z := y * y
+END;
+
+BEGIN
+   READ x;
+   y := a * x + b;
+   CALL square;
+   WRITE z + c
+END
+.

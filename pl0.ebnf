@@ -1,0 +1,23 @@
+program = block "." ;
+
+block = [ "CONST" ident "=" number {"," ident "=" number} ";"]
+        [ "VAR" ident {"," ident} ";"]
+        { "PROCEDURE" ident ";" block ";" }
+        statement ;
+
+statement = [ ident ":=" expression
+              | "CALL" ident 
+              | "READ" ident
+              | "WRITE" expression 
+              | "BEGIN" statement {";" statement } "END" 
+              | "IF" condition "THEN" statement 
+              | "WHILE" condition "DO" statement ] ;
+
+condition = "ODD" expression
+            | expression ("="|"#"|"<"|"<="|">"|">=") expression ;
+
+expression = [ "+"|"-"] term { ("+"|"-") term} ;
+
+term = factor {("*"|"/") factor} ;
+
+factor = ident | number | "(" expression ")";
