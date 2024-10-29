@@ -13,7 +13,7 @@ interpreter) from scratch, this project makes use of established tools:
 Flex for lexical analysis and Bison for parsing, generating an abstract syntax
 tree (AST) representation of the input program.
 
-Type checking, semantic analysis, and code generation are also implemented.
+Type checking and semantic analysis are also implemented, code generation is not.
 
 ## Prerequisites
 
