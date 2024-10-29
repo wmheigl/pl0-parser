@@ -11,9 +11,10 @@ most important fundamentals of programming languages and compilers. While the
 author develops quite elegantly the necessary components (scanner, parser,
 interpreter) from scratch, this project makes use of established tools:
 Flex for lexical analysis and Bison for parsing, generating an abstract syntax
-tree (AST) representation of the input program. Type checking, semantic analysis
-are implemented from scratch. Ultimately, I would like to use LLVM for the
-backend.
+tree (AST) representation of the input program.
+
+Type checking, semantic analysis will be implemented from scratch. Ultimately, I
+would like to use LLVM for the backend.
 
 ## Prerequisites
 
