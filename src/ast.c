@@ -42,71 +42,75 @@ const char* to_string(OpType op) {
 
 // Function to print the AST
 void print_ast(Node* node, int depth) {
+    fprint_ast(stdout, node, depth);
+}
+
+void fprint_ast(FILE* out, Node* node, int depth) {
     if (node == NULL) return;
 
     // Print indentation
     for (int i = 0; i < depth; i++) {
-        printf("  ");
+        fprintf(out, "  ");
     }
 
     // Print node information
     switch (node->type) {
         case NODE_PROGRAM:
-            printf("Program\n");
+            fprintf(out, "Program\n");
             break;
         case NODE_BLOCK:
-            printf("Block\n");
+            fprintf(out, "Block\n");
             break;
         case NODE_CONST_DECL:
-            printf("Const Declaration: %s = %d\n", node->left->name, node->right->value);
+            fprintf(out, "Const Declaration: %s = %d\n", node->left->name, node->right->value);
             break;
         case NODE_VAR_DECL:
-            printf("Var Declaration: %s\n", node->left->name);
+            fprintf(out, "Var Declaration: %s\n", node->left->name);
             break;
         case NODE_PROC:
-            printf("Procedure Declaration: %s\n", node->left->name);
+            fprintf(out, "Procedure Declaration: %s\n", node->left->name);
             break;
         case NODE_ASSIGN:
-            printf("Assignment: %s :=\n", node->left->name);
+            fprintf(out, "Assignment: %s :=\n", node->left->name);
             break;
         case NODE_CALL:
-            printf("Procedure Call: %s\n", node->left->name);
+            fprintf(out, "Procedure Call: %s\n", node->left->name);
             break;
         case NODE_INPUT:
-            printf("Input: %s\n", node->left->name);
+            fprintf(out, "Input: %s\n", node->left->name);
             break;
         case NODE_OUTPUT:
-            printf("Output\n");
+            fprintf(out, "Output\n");
             break;
         case NODE_COMPOUND:
-            printf("Compound Statement\n");
+            fprintf(out, "Compound Statement\n");
             break;
         case NODE_IF:
-            printf("If Statement\n");
+            fprintf(out, "If Statement\n");
             break;
         case NODE_WHILE:
-            printf("While Loop\n");
+            fprintf(out, "While Loop\n");
             break;
         case NODE_CONDITION:
-            printf("Condition: %s\n", to_string(node->op));
+            fprintf(out, "Condition: %s\n", to_string(node->op));
             break;
         case NODE_BINARY_OP:
-            printf("Binary Operation: %s\n", to_string(node->op));
+            fprintf(out, "Binary Operation: %s\n", to_string(node->op));
             break;
         case NODE_NUMBER:
-            printf("Number: %d\n", node->value);
+            fprintf(out, "Number: %d\n", node->value);
             break;
         case NODE_IDENT:
-            printf("Identifier: %s\n", node->name);
+            fprintf(out, "Identifier: %s\n", node->name);
             break;
     }
 
     // Recursively print child nodes
-    print_ast(node->left, depth + 1);
-    print_ast(node->right, depth + 1);
+    fprint_ast(out, node->left, depth + 1);
+    fprint_ast(out, node->right, depth + 1);
 
     // Print next node in list (if any)
-    print_ast(node->next, depth);
+    fprint_ast(out, node->next, depth);
 }
 
 // Helper function to reverse a linked list of nodes

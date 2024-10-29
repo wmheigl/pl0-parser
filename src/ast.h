@@ -57,6 +57,8 @@ typedef struct Node {
 Node* new_node(NodeType type);
 Node* new_ident(const char* name);
 Node* new_number(int value);
+const char* to_string(OpType op);
 void print_ast(Node* node, int depth);
+void fprint_ast(FILE* out, Node* node, int depth);
 
 #endif // AST_H
