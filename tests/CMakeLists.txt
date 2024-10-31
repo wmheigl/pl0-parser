@@ -3,6 +3,7 @@ add_executable(run_tests
     test-lexer.cpp
     test-parser.cpp
     test-ast.cpp
+    test-analysis.cpp
 )
 
 target_link_libraries(run_tests

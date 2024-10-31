@@ -217,3 +217,60 @@ bool analyze_semantics(SemanticContext* ctx, Node* node) {
             return true;
     }
 }
+
+void dump_symbol_table(SemanticContext* ctx, FILE* out) {
+    fprintf(out, "Symbol Table:\n");
+    fprintf(out, "%-20s %-10s %-10s %s\n", "Name", "Kind", "Type", "Value");
+    fprintf(out, "----------------------------------------\n");
+
+    for (Scope* scope = ctx->current_scope; scope; scope = scope->parent) {
+        for (Symbol* sym = scope->symbols; sym; sym = sym->next) {
+            const char* kind_str = 
+                sym->kind == SYM_CONSTANT ? "constant" :
+                sym->kind == SYM_VARIABLE ? "variable" : "procedure";
+            
+            const char* type_str = 
+                sym->type == TYPE_INTEGER ? "integer" :
+                sym->type == TYPE_VOID ? "void" : "unknown";
+
+            fprintf(out, "%-20s %-10s %-10s ", sym->name, kind_str, type_str);
+            
+            if (sym->kind == SYM_CONSTANT) {
+                fprintf(out, "%d", sym->value);
+            } else {
+                fprintf(out, "-");
+            }
+            fprintf(out, "\n");
+        }
+    }
+}
+
+bool run_semantic_analysis(Node* ast, const Options* opts) {
+    if (opts->verbose) {
+        fprintf(opts->output, "Phase 2: Semantic Analysis\n");
+    }
+    
+    SemanticContext* sem_ctx = create_semantic_context();
+    if (!sem_ctx) {
+        fprintf(stderr, "Error: Failed to create semantic analysis context\n");
+        return false;
+    }
+    
+    bool success = analyze_semantics(sem_ctx, ast);
+    
+    if (!success) {
+        fprintf(stderr, "Semantic Error: %s\n", sem_ctx->error_msg);
+    } else if (opts->verbose) {
+        fprintf(opts->output, "Semantic analysis completed successfully\n");
+    }
+    
+    if (opts->print_symbols) {
+		fprintf(opts->output, "\n----------------------------------------\n");
+        dump_symbol_table(sem_ctx, opts->output);
+    }
+    
+    free_semantic_context(sem_ctx);
+    return success;
+}
+
+

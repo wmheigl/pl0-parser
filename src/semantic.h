@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "ast.h"
+#include "options.h"
 #include "type_check.h"
 
 typedef enum {
@@ -35,5 +36,7 @@ typedef struct {
 SemanticContext* create_semantic_context(void);
 void free_semantic_context(SemanticContext* ctx);
 bool analyze_semantics(SemanticContext* ctx, Node* node);
+bool run_semantic_analysis(Node* ast, const Options* opt);
+void dump_symbol_table(SemanticContext* ctx, FILE* out);
 
 #endif // SEMANTIC_H

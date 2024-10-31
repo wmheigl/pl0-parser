@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "ast.h"
+#include "options.h"
 
 typedef enum {
     TYPE_INTEGER,    // For numbers and arithmetic expressions
@@ -22,6 +23,7 @@ TypeContext* create_type_context(void);
 void free_type_context(TypeContext* ctx);
 Type check_type(TypeContext* ctx, Node* node);
 const char* type_to_string(Type type);
+bool run_type_checking(Node* ast, const Options *opts);
 
 #endif // TYPE_CHECK_H
 

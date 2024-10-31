@@ -29,7 +29,7 @@ target_include_directories(pl0_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 # Create the main executable
-add_executable(pl0_parser src/main.c)
+add_executable(pl0_parser src/main.c src/options.c)
 target_link_libraries(pl0_parser pl0_lib)
 
 # Google Test

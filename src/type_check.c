@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "options.h"
 #include "type_check.h"
 
 TypeContext* create_type_context() {
@@ -15,7 +16,6 @@ const char* type_to_string(Type type) {
     switch (type) {
         case TYPE_INTEGER: return "integer";
         case TYPE_BOOLEAN: return "boolean";
-        case TYPE_VOID: return "void";
         case TYPE_ERROR: return "error";
         default: return "unknown";
     }
@@ -44,7 +44,11 @@ static Type check_binary_op_type(TypeContext* ctx, Node* node) {
 }
 
 static Type check_expression_type(TypeContext* ctx, Node* node) {
-    if (!node) return TYPE_ERROR;
+    if (!node) {
+        snprintf(ctx->error_msg, sizeof(ctx->error_msg),
+                 "Node not allocated or invalid");
+		return TYPE_ERROR;
+	}
     
     switch (node->type) {
         case NODE_NUMBER:
@@ -64,7 +68,13 @@ static Type check_expression_type(TypeContext* ctx, Node* node) {
 }
 
 static Type check_condition_type(TypeContext* ctx, Node* node) {
-    if (!node || node->type != NODE_CONDITION) {
+    if (!node) {
+        snprintf(ctx->error_msg, sizeof(ctx->error_msg),
+                 "Node not allocated or invalid");
+		return TYPE_ERROR;
+	}
+
+    if (node->type != NODE_CONDITION) {
         snprintf(ctx->error_msg, sizeof(ctx->error_msg),
                 "Expected condition node");
         return TYPE_ERROR;
@@ -149,4 +159,29 @@ Type check_type(TypeContext* ctx, Node* node) {
             return check_expression_type(ctx, node);
     }
 }
+
+bool run_type_checking(Node* ast, const Options *opts) {
+    if (opts->verbose) {
+        fprintf(opts->output, "Phase 1: Type Checking\n");
+    }
+    
+    TypeContext* type_ctx = create_type_context();
+    if (!type_ctx) {
+        fprintf(stderr, "Error: Failed to create type checking context\n");
+        return false;
+    }
+    
+    Type program_type = check_type(type_ctx, ast);
+    bool success = (program_type != TYPE_ERROR);
+    
+    if (!success) {
+        fprintf(stderr, "Type Error: %s\n", type_ctx->error_msg);
+    } else if (opts->verbose) {
+        fprintf(opts->output, "Type checking completed successfully\n");
+    }
+    
+    free_type_context(type_ctx);
+    return success;
+}
+
 

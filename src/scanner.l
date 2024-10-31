@@ -6,8 +6,6 @@
 extern void yyerror(const char *s);
 %}
 
-export TERM=xterm-256color
-
 %option warn nodefault
 %option noyywrap noinput nounput
 %option yylineno

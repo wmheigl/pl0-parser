@@ -41,7 +41,7 @@ void yyerror(const char *s);
 %type <node>  const_decl var_decl statement statement_list
 %type <node>  expression condition term factor
 
-/* Commented out precedence rules
+/* Precence rules are implicit via grammar rules
 %right ASSIGN
 %left  LT GT EQ NEQ LTE GTE
 %left  PLUS MINUS
