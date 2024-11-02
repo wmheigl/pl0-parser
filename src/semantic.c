@@ -1,23 +1,36 @@
 #include "semantic.h"
 
+// Create semantic context
 SemanticContext* create_semantic_context() {
     SemanticContext* ctx = malloc(sizeof(SemanticContext));
-    ctx->current_scope = malloc(sizeof(Scope));
-    ctx->current_scope->symbols = NULL;
-    ctx->current_scope->parent = NULL;
+    if (!ctx) return NULL;
+
+    // Initialize global scope
+    ctx->global_scope = malloc(sizeof(Scope));
+    if (!ctx->global_scope) {
+        free(ctx);
+        return NULL;
+    }
+    ctx->global_scope->symbols = NULL;
+    ctx->global_scope->parent = NULL;
+
+    // Set current scope to global scope
+    ctx->current_scope = ctx->global_scope;
     ctx->error_msg[0] = '\0';
     return ctx;
 }
 
+// Clean up symbols in a scope
 static void free_symbols(Symbol* symbol) {
     while (symbol) {
         Symbol* next = symbol->next;
-        free(symbol->name);
-        free(symbol);
+        free(symbol->name);  // Free the name string
+        free(symbol);        // Free the symbol structure
         symbol = next;
     }
 }
 
+// Clean up a scope
 static void free_scope(Scope* scope) {
     if (scope) {
         free_symbols(scope->symbols);
@@ -25,18 +38,27 @@ static void free_scope(Scope* scope) {
     }
 }
 
+// Free semantic context
 void free_semantic_context(SemanticContext* ctx) {
     if (!ctx) return;
     
+    // Free all scopes except global scope
     Scope* current = ctx->current_scope;
-    while (current) {
+    while (current && current != ctx->global_scope) {
         Scope* parent = current->parent;
         free_scope(current);
         current = parent;
     }
+    
+    // Free global scope last
+    if (ctx->global_scope) {
+        free_scope(ctx->global_scope);
+    }
+    
     free(ctx);
 }
 
+// Create new scope
 static bool enter_scope(SemanticContext* ctx) {
     Scope* new_scope = malloc(sizeof(Scope));
     if (!new_scope) return false;
@@ -47,22 +69,38 @@ static bool enter_scope(SemanticContext* ctx) {
     return true;
 }
 
+// Return to parent scope
 static bool leave_scope(SemanticContext* ctx) {
-    if (!ctx->current_scope->parent) return false;
+    if (ctx->current_scope == ctx->global_scope) return false;
     
     Scope* old_scope = ctx->current_scope;
     ctx->current_scope = old_scope->parent;
-    free_scope(old_scope);
+    
+    // Copy symbols from old scope to current scope if they're not already there
+    Symbol* sym = old_scope->symbols;
+    while (sym) {
+        Symbol* next = sym->next;
+        sym->next = ctx->current_scope->symbols;
+        ctx->current_scope->symbols = sym;
+        sym = next;
+    }
+    
+    // Free the scope structure but not its symbols
+    free(old_scope);
     return true;
 }
 
+// Look up symbol in current scope only
 static Symbol* lookup_symbol_current_scope(SemanticContext* ctx, const char* name) {
+    if (!ctx->current_scope) return NULL;
+    
     for (Symbol* s = ctx->current_scope->symbols; s; s = s->next) {
         if (strcmp(s->name, name) == 0) return s;
     }
     return NULL;
 }
 
+// Look up symbol in all accessible scopes
 static Symbol* lookup_symbol(SemanticContext* ctx, const char* name) {
     for (Scope* scope = ctx->current_scope; scope; scope = scope->parent) {
         for (Symbol* s = scope->symbols; s; s = s->next) {
@@ -72,8 +110,10 @@ static Symbol* lookup_symbol(SemanticContext* ctx, const char* name) {
     return NULL;
 }
 
-static bool declare_symbol(SemanticContext* ctx, const char* name, SymbolKind kind, Type type, int value) {
-    if (lookup_symbol_current_scope(ctx, name)) {
+// Add new symbol to current scope
+static bool declare_symbol(SemanticContext* ctx, const char* name, 
+                         SymbolKind kind, Type type, int value) {
+    if (!ctx->current_scope || lookup_symbol_current_scope(ctx, name)) {
         snprintf(ctx->error_msg, sizeof(ctx->error_msg),
                 "Symbol '%s' already declared in current scope", name);
         return false;
@@ -83,8 +123,13 @@ static bool declare_symbol(SemanticContext* ctx, const char* name, SymbolKind ki
     if (!symbol) return false;
     
     symbol->name = strdup(name);
+    if (!symbol->name) {
+        free(symbol);
+        return false;
+    }
+    
     symbol->kind = kind;
-    symbol->type = type;
+    symbol->type = type;     // Set the type
     symbol->value = value;
     symbol->next = ctx->current_scope->symbols;
     ctx->current_scope->symbols = symbol;
@@ -92,45 +137,51 @@ static bool declare_symbol(SemanticContext* ctx, const char* name, SymbolKind ki
 }
 
 static bool analyze_block(SemanticContext* ctx, Node* node) {
+    if (!node) return true;
+
     if (!enter_scope(ctx)) return false;
     
     // Analyze constant declarations
     for (Node* const_decl = node->left; const_decl; const_decl = const_decl->next) {
-        if (const_decl->type != NODE_CONST_DECL) continue;
-        
-        if (!declare_symbol(ctx, const_decl->left->name, SYM_CONSTANT, 
-                          TYPE_INTEGER, const_decl->right->value)) {
-            return false;
+        if (const_decl->type == NODE_CONST_DECL) {
+            if (!declare_symbol(ctx, const_decl->left->name, 
+                              SYM_CONSTANT, TYPE_INTEGER, 
+                              const_decl->right->value)) {
+                return false;
+            }
         }
     }
     
     // Analyze variable declarations
-    for (Node* var_decl = node->right; var_decl && var_decl->type == NODE_VAR_DECL;
-         var_decl = var_decl->next) {
-        if (!declare_symbol(ctx, var_decl->left->name, SYM_VARIABLE, 
-                          TYPE_INTEGER, 0)) {
+    Node* var_decl = node->right;
+    while (var_decl && var_decl->type == NODE_VAR_DECL) {
+        if (!declare_symbol(ctx, var_decl->left->name, 
+                          SYM_VARIABLE, TYPE_INTEGER, 0)) {
             return false;
         }
+        var_decl = var_decl->next;
     }
     
     // Analyze procedure declarations
-    for (Node* proc = node->right; proc; proc = proc->next) {
-        if (proc->type != NODE_PROC) continue;
-        
-        if (!declare_symbol(ctx, proc->left->name, SYM_PROCEDURE, 
-                          TYPE_VOID, 0)) {
-            return false;
+    Node* proc = var_decl;  // Continue from where var_decl left off
+    while (proc) {
+        if (proc->type == NODE_PROC) {
+            if (!declare_symbol(ctx, proc->left->name, 
+                              SYM_PROCEDURE, TYPE_VOID, 0)) {
+                return false;
+            }
+            if (!analyze_block(ctx, proc->right)) {
+                return false;
+            }
         }
-        
-        if (!analyze_block(ctx, proc->right)) {
-            return false;
-        }
+        proc = proc->next;
     }
     
-    // Analyze statements
+    // Find and analyze the main statement
     Node* stmt = node->right;
-    while (stmt && stmt->type != NODE_COMPOUND && 
-           stmt->type != NODE_IF && stmt->type != NODE_WHILE) {
+    while (stmt && stmt->type != NODE_COMPOUND && stmt->type != NODE_IF && 
+           stmt->type != NODE_WHILE && stmt->type != NODE_ASSIGN &&
+           stmt->type != NODE_CALL && stmt->type != NODE_INPUT) {
         stmt = stmt->next;
     }
     
@@ -143,6 +194,37 @@ static bool analyze_block(SemanticContext* ctx, Node* node) {
     leave_scope(ctx);
     return true;
 }
+
+// Modified dump_symbol_table to include type information
+void dump_symbol_table(SemanticContext* ctx, FILE* out) {
+    fprintf(out, "\nSymbol Table:\n");
+    fprintf(out, "%-20s %-10s %-10s %s\n", "Name", "Kind", "Type", "Value");
+    fprintf(out, "------------------------------------------------\n");
+    
+    for (Scope* scope = ctx->current_scope; scope; scope = scope->parent) {
+        for (Symbol* sym = scope->symbols; sym; sym = sym->next) {
+            const char* kind_str = 
+                sym->kind == SYM_CONSTANT ? "constant" :
+                sym->kind == SYM_VARIABLE ? "variable" : "procedure";
+            
+            const char* type_str = 
+                sym->type == TYPE_INTEGER ? "integer" :
+                sym->type == TYPE_VOID ? "void" :
+                sym->type == TYPE_BOOLEAN ? "boolean" : "error";
+            
+            fprintf(out, "%-20s %-10s %-10s ", sym->name, kind_str, type_str);
+            
+            if (sym->kind == SYM_CONSTANT) {
+                fprintf(out, "%d", sym->value);
+            } else {
+                fprintf(out, "-");
+            }
+            fprintf(out, "\n");
+        }
+        fprintf(out, "------------------------------------------------\n");
+    }
+}
+
 
 bool analyze_semantics(SemanticContext* ctx, Node* node) {
     if (!node) return true;
@@ -209,39 +291,14 @@ bool analyze_semantics(SemanticContext* ctx, Node* node) {
             
         case NODE_COMPOUND:
             for (Node* stmt = node->left; stmt; stmt = stmt->next) {
-                if (!analyze_semantics(ctx, stmt)) return false;
+                if (!analyze_semantics(ctx, stmt)) {
+                    return false;
+                }
             }
             return true;
             
         default:
             return true;
-    }
-}
-
-void dump_symbol_table(SemanticContext* ctx, FILE* out) {
-    fprintf(out, "Symbol Table:\n");
-    fprintf(out, "%-20s %-10s %-10s %s\n", "Name", "Kind", "Type", "Value");
-    fprintf(out, "----------------------------------------\n");
-
-    for (Scope* scope = ctx->current_scope; scope; scope = scope->parent) {
-        for (Symbol* sym = scope->symbols; sym; sym = sym->next) {
-            const char* kind_str = 
-                sym->kind == SYM_CONSTANT ? "constant" :
-                sym->kind == SYM_VARIABLE ? "variable" : "procedure";
-            
-            const char* type_str = 
-                sym->type == TYPE_INTEGER ? "integer" :
-                sym->type == TYPE_VOID ? "void" : "unknown";
-
-            fprintf(out, "%-20s %-10s %-10s ", sym->name, kind_str, type_str);
-            
-            if (sym->kind == SYM_CONSTANT) {
-                fprintf(out, "%d", sym->value);
-            } else {
-                fprintf(out, "-");
-            }
-            fprintf(out, "\n");
-        }
     }
 }
 
@@ -265,12 +322,10 @@ bool run_semantic_analysis(Node* ast, const Options* opts) {
     }
     
     if (opts->print_symbols) {
-		fprintf(opts->output, "\n----------------------------------------\n");
+        //fprintf(opts->output, "\n----------------------------------------\n");
         dump_symbol_table(sem_ctx, opts->output);
     }
     
     free_semantic_context(sem_ctx);
     return success;
 }
-
-

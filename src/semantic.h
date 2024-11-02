@@ -17,7 +17,7 @@ typedef enum {
 typedef struct Symbol {
     char* name;
     SymbolKind kind;
-    Type type;          // Always TYPE_INTEGER for vars/consts, TYPE_VOID for procedures
+    Type type;          // TYPE_INTEGER for vars/consts, TYPE_VOID for procedures
     int value;          // Used for constants
     struct Symbol* next;
 } Symbol;
@@ -29,6 +29,7 @@ typedef struct Scope {
 
 typedef struct {
     Scope* current_scope;
+    Scope* global_scope; // keep track of global scope across analysis phases
     char error_msg[256];
 } SemanticContext;
 

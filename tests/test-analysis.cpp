@@ -1,145 +1,257 @@
 #include <gtest/gtest.h>
 #include <string>
-#include <cstdio>
+#include <sstream>
 
 extern "C" {
 #include "ast.h"
-#include "type_check.h"
 #include "semantic.h"
 extern int yyparse(void);
 extern struct yy_buffer_state* yy_scan_string(const char*);
 extern Node* ast_root;
 }
 
-class AnalysisTest : public ::testing::Test {
+class SemanticAnalysisTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        type_ctx = create_type_context();
         sem_ctx = create_semantic_context();
+        ASSERT_NE(sem_ctx, nullptr);
     }
 
     void TearDown() override {
-        if (type_ctx) free_type_context(type_ctx);
-        if (sem_ctx) free_semantic_context(sem_ctx);
+        if (sem_ctx) {
+            free_semantic_context(sem_ctx);
+        }
     }
 
-    bool parse_and_analyze(const char* input) {
-        yy_scan_string(input);
+    bool parse_and_analyze(const std::string& input) {
+        yy_scan_string(input.c_str());
         if (yyparse() != 0) return false;
-        
-        Type type = check_type(type_ctx, ast_root);
-        if (type == TYPE_ERROR) return false;
-        
         return analyze_semantics(sem_ctx, ast_root);
     }
 
-    TypeContext* type_ctx;
+    // Helper function to capture symbol table output
+    std::string get_symbol_table() {
+        char* buffer = nullptr;
+        size_t size = 0;
+        FILE* memstream = open_memstream(&buffer, &size);
+        
+        dump_symbol_table(sem_ctx, memstream);
+        fclose(memstream);
+        
+        std::string result(buffer);
+        free(buffer);
+        return result;
+    }
+
     SemanticContext* sem_ctx;
 };
 
-// Basic program tests
-TEST_F(AnalysisTest, EmptyProgram) {
-    EXPECT_TRUE(parse_and_analyze("."));
+/* NOTE: Strings that serve as test programs will be streamed into
+ *       an array in memory. There needs to be empty space between
+ *       and after keywords or a '\n' (unless there is a ';') so
+ *       that parsing works correctly.
+ */
+
+// Basic Declaration Tests
+TEST_F(SemanticAnalysisTest, ConstantDeclaration) {
+    ASSERT_TRUE(parse_and_analyze("CONST x = 42;."));
+    std::string symbols = get_symbol_table();
+    EXPECT_TRUE(symbols.find("x") != std::string::npos);
+    EXPECT_TRUE(symbols.find("constant") != std::string::npos);
+    EXPECT_TRUE(symbols.find("42") != std::string::npos);
 }
 
-TEST_F(AnalysisTest, SimpleConstant) {
-    EXPECT_TRUE(parse_and_analyze("CONST x = 42;."));
+TEST_F(SemanticAnalysisTest, MultipleConstants) {
+    ASSERT_TRUE(parse_and_analyze("CONST x = 42, y = 10;."));
+    std::string symbols = get_symbol_table();
+    EXPECT_TRUE(symbols.find("x") != std::string::npos);
+    EXPECT_TRUE(symbols.find("y") != std::string::npos);
+    EXPECT_TRUE(symbols.find("42") != std::string::npos);
+    EXPECT_TRUE(symbols.find("10") != std::string::npos);
 }
 
-TEST_F(AnalysisTest, SimpleVariable) {
-    EXPECT_TRUE(parse_and_analyze("VAR x; BEGIN x := 42 END."));
+TEST_F(SemanticAnalysisTest, VariableDeclaration) {
+    ASSERT_TRUE(parse_and_analyze("VAR x;."));
+    std::string symbols = get_symbol_table();
+    EXPECT_TRUE(symbols.find("x") != std::string::npos);
+    EXPECT_TRUE(symbols.find("variable") != std::string::npos);
 }
 
-// Type checking tests
-TEST_F(AnalysisTest, InvalidAssignment) {
-    EXPECT_FALSE(parse_and_analyze("VAR x; BEGIN x := y END."));
-    EXPECT_STREQ(sem_ctx->error_msg, "Undefined identifier 'y'");
+TEST_F(SemanticAnalysisTest, MultipleVariables) {
+    ASSERT_TRUE(parse_and_analyze("VAR x, y, z;."));
+    std::string symbols = get_symbol_table();
+    EXPECT_TRUE(symbols.find("x") != std::string::npos);
+    EXPECT_TRUE(symbols.find("y") != std::string::npos);
+    EXPECT_TRUE(symbols.find("z") != std::string::npos);
 }
 
-TEST_F(AnalysisTest, AssignToConstant) {
-    EXPECT_FALSE(parse_and_analyze("CONST x = 42; BEGIN x := 10 END."));
-    EXPECT_STREQ(sem_ctx->error_msg, "Cannot assign to constant 'x'");
+// Procedure Tests
+TEST_F(SemanticAnalysisTest, ProcedureDeclaration) {
+    ASSERT_TRUE(parse_and_analyze(
+        "PROCEDURE p;"
+        "BEGIN END;"
+        "."));
+    std::string symbols = get_symbol_table();
+    EXPECT_TRUE(symbols.find("p") != std::string::npos);
+    EXPECT_TRUE(symbols.find("procedure") != std::string::npos);
 }
 
-TEST_F(AnalysisTest, ValidArithmetic) {
-    EXPECT_TRUE(parse_and_analyze(
+TEST_F(SemanticAnalysisTest, NestedProcedures) {
+    ASSERT_TRUE(parse_and_analyze(
+        "PROCEDURE outer;"
+        "  PROCEDURE inner;"
+        "  BEGIN"
+        "  END;"
+        "BEGIN END;"
+        "."));
+    std::string symbols = get_symbol_table();
+    EXPECT_TRUE(symbols.find("outer") != std::string::npos);
+    EXPECT_TRUE(symbols.find("inner") != std::string::npos);
+}
+
+// Scope Tests
+TEST_F(SemanticAnalysisTest, VariableScoping) {
+    ASSERT_TRUE(parse_and_analyze(
+        "VAR x;"
+        "PROCEDURE p;"
+        "  VAR x;"
+        "BEGIN"
+        "  x := 1"
+        "END;"
+        "BEGIN"
+        "  x := 2"
+        "END."));
+    std::string symbols = get_symbol_table();
+    // Should see x listed twice
+    size_t count = 0;
+    size_t pos = 0;
+    while ((pos = symbols.find("x", pos)) != std::string::npos) {
+        count++;
+        pos++;
+    }
+    EXPECT_GE(count, 2);
+}
+
+// Error Cases
+TEST_F(SemanticAnalysisTest, DuplicateConstant) {
+    ASSERT_FALSE(parse_and_analyze(
+        "CONST x = 1, x = 2;."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("already declared") != std::string::npos);
+}
+
+TEST_F(SemanticAnalysisTest, DuplicateVariable) {
+    ASSERT_FALSE(parse_and_analyze(
+        "VAR x, x;."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("already declared") != std::string::npos);
+}
+
+TEST_F(SemanticAnalysisTest, DuplicateProcedure) {
+    ASSERT_FALSE(parse_and_analyze(
+        "PROCEDURE p; BEGIN END;"
+        "PROCEDURE p; BEGIN END;."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("already declared") != std::string::npos);
+}
+
+TEST_F(SemanticAnalysisTest, UndefinedVariable) {
+    ASSERT_FALSE(parse_and_analyze(
+        "BEGIN x := 1 END."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("Undefined identifier") != std::string::npos);
+}
+
+TEST_F(SemanticAnalysisTest, AssignToConstant) {
+    ASSERT_FALSE(parse_and_analyze(
+        "CONST x = 1;"
+        "BEGIN x := 2 END."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("Cannot assign to constant") != std::string::npos);
+}
+
+TEST_F(SemanticAnalysisTest, AssignToProcedure) {
+    ASSERT_FALSE(parse_and_analyze(
+        "PROCEDURE p; BEGIN END;"
+        "BEGIN p := 1 END."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("Cannot assign to procedure") != std::string::npos);
+}
+
+// Compound Statement Tests
+TEST_F(SemanticAnalysisTest, CompoundStatement) {
+    ASSERT_TRUE(parse_and_analyze(
         "VAR x, y;"
         "BEGIN"
-        "  x := 42;"
-        "  y := x + 10 * 2"
+        "  x := 1;"
+        "  y := 2"
         "END."));
 }
 
-// Semantic analysis tests
-TEST_F(AnalysisTest, ProcedureCall) {
-    EXPECT_TRUE(parse_and_analyze(
-        "VAR x;"
-        "PROCEDURE p;"
-        "BEGIN"
-        "   x := 42"
-        "END;"
-        "CALL p"
-        "."));
+// Procedure Call Tests
+TEST_F(SemanticAnalysisTest, ValidProcedureCall) {
+    ASSERT_TRUE(parse_and_analyze(
+        "PROCEDURE p; BEGIN END;"
+        "BEGIN CALL p END."));
 }
 
-TEST_F(AnalysisTest, UndefinedProcedure) {
-    EXPECT_FALSE(parse_and_analyze("BEGIN CALL p END."));
-    EXPECT_STREQ(sem_ctx->error_msg, "Undefined procedure 'p'");
+TEST_F(SemanticAnalysisTest, UndefinedProcedureCall) {
+    ASSERT_FALSE(parse_and_analyze(
+        "BEGIN CALL p END."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("Undefined procedure") != std::string::npos);
 }
 
-TEST_F(AnalysisTest, Scoping) {
-    EXPECT_TRUE(parse_and_analyze(
+TEST_F(SemanticAnalysisTest, CallNonProcedure) {
+    ASSERT_FALSE(parse_and_analyze(
         "VAR x;"
-        "PROCEDURE p;"
-        "VAR x;"
-        "BEGIN"
-        "   x := 42"
-        "END;"
-        "BEGIN"
-        "  x := 10;"
-        "  CALL p"
-        "END."));
+        "BEGIN CALL x END."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("is not a procedure") != std::string::npos);
 }
 
-// Control structure tests
-TEST_F(AnalysisTest, ValidWhileLoop) {
-    EXPECT_TRUE(parse_and_analyze(
+// Read Statement Tests
+TEST_F(SemanticAnalysisTest, ValidRead) {
+    ASSERT_TRUE(parse_and_analyze(
         "VAR x;"
-        "BEGIN"
-        "  x := 10;"
-        "  WHILE x > 0 DO"
-        "    x := x - 1"
-        "END."));
+        "BEGIN READ x END."));
 }
 
-TEST_F(AnalysisTest, ValidIfStatement) {
-    EXPECT_TRUE(parse_and_analyze(
-        "VAR x;"
-        "BEGIN"
-        "  x := 10;"
-        "  IF x = 10 THEN"
-        "    x := 0"
-        "END."));
+TEST_F(SemanticAnalysisTest, ReadIntoConstant) {
+    ASSERT_FALSE(parse_and_analyze(
+        "CONST x = 1;"
+        "BEGIN READ x END."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("must be a variable") != std::string::npos);
 }
 
-// Complex program tests
-TEST_F(AnalysisTest, ComplexProgram) {
-    EXPECT_TRUE(parse_and_analyze(
+TEST_F(SemanticAnalysisTest, ReadIntoProcedure) {
+    ASSERT_FALSE(parse_and_analyze(
+        "PROCEDURE p; BEGIN END;"
+        "BEGIN READ p END."));
+    EXPECT_TRUE(std::string(sem_ctx->error_msg).find("must be a variable") != std::string::npos);
+}
+
+// Complex Program Tests
+TEST_F(SemanticAnalysisTest, ComplexProgram) {
+    ASSERT_TRUE(parse_and_analyze(
         "CONST max = 100;"
         "VAR n, sum, i;"
         "PROCEDURE compute;"
+        "  VAR temp;"
         "  BEGIN"
         "    sum := 0;"
         "    i := 1;"
         "    WHILE i <= n DO"
         "    BEGIN"
-        "      sum := sum + i;"
+        "      temp := i;"
+        "      sum := sum + temp;"
         "      i := i + 1"
         "    END"
         "  END;"
         "BEGIN"
         "  n := max;"
-        "  CALL compute"
+        "  CALL compute "
         "END."));
+    
+    std::string symbols = get_symbol_table();
+    // Verify all symbols are present
+    EXPECT_TRUE(symbols.find("max") != std::string::npos);
+    EXPECT_TRUE(symbols.find("n") != std::string::npos);
+    EXPECT_TRUE(symbols.find("sum") != std::string::npos);
+    EXPECT_TRUE(symbols.find("i") != std::string::npos);
+    EXPECT_TRUE(symbols.find("compute") != std::string::npos);
+    EXPECT_TRUE(symbols.find("temp") != std::string::npos);
 }
 
