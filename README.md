@@ -42,6 +42,7 @@ This will create two executables:
 
 - `src/`: Source code files
   - `ast.c/h`: AST implementation
+  - `semantic.c/h`: semantic analysis implementation
   - `parser.y`: Bison grammar file
   - `scanner.l`: Flex lexer file
   - `main.c`: Main program entry point
@@ -49,6 +50,7 @@ This will create two executables:
   - `test-lexer.cpp`: Lexical analyzer tests
   - `test-parser.cpp`: Parser tests
   - `test-ast.cpp`: AST tests
+  - `test-analysis.cpp`: semantic analysis tests
 - `examples/`: Example PL/0 programs
 - `pl0.ebnf`: Language grammar in EBNF notation
 
