@@ -13,7 +13,7 @@ extern int yylineno;
 extern Node* ast_root;
 
 static void print_phase_separator(FILE* out) {
-    fprintf(out, "\n----------------------------------------\n");
+    fprintf(out, "\n------------------------------------------------\n");
 }
 
 /* Main function */
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     // Success
     if (opts.verbose) {
         print_phase_separator(opts.output);
-        fprintf(opts.output, "All analysis phases completed successfully\n");
+        fprintf(opts.output, "All analysis phases completed successfully\n\n");
     }
     
     fclose(yyin);
